@@ -1,0 +1,15 @@
+{
+  "name": "deslop-please",
+  "displayName": "deslop-please",
+  "version": "0.1.0",
+  "description": "Keeps agents' Rust code to deep modules and narrow interfaces: the deslop-please MCP server, a skill for fixing its findings, and a stop hook that checks each turn that changed Rust code.",
+  "author": { "name": "cheng315ncu" },
+  "homepage": "https://github.com/cheng315ncu/deslop-please-agents",
+  "repository": "https://github.com/cheng315ncu/deslop-please-agents",
+  "license": "MIT",
+  "keywords": ["rust", "lint", "architecture", "modules"],
+  "category": "developer-tools",
+  "skills": "./skills/",
+  "hooks": "./hooks/cursor-hooks.json",
+  "mcpServers": "./.cursor-plugin/mcp.json"
+}

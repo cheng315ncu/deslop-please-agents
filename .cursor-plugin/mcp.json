@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "deslop-please": {
+      "command": "deslop-please",
+      "args": ["--mcp", "${workspaceFolder}"]
+    }
+  }
+}

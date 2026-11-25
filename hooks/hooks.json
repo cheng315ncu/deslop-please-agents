@@ -1,0 +1,27 @@
+{
+  "description": "Runs deslop-please when a turn ends with Rust code changed since the last check, and hands its errors back to Claude.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check.sh\" session-start",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check.sh\" stop",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

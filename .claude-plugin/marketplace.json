@@ -1,0 +1,12 @@
+{
+  "name": "cheng315ncu",
+  "owner": { "name": "cheng315ncu" },
+  "description": "deslop-please for coding agents.",
+  "plugins": [
+    {
+      "name": "deslop-please",
+      "source": "./",
+      "description": "deslop-please for agents: MCP server, skill and Stop hook for Rust workspaces."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "deslop-please",
+  "version": "0.1.0",
+  "private": true,
+  "description": "deslop-please for pi: a skill, and a check before the agent settles that hands its errors back.",
+  "license": "MIT",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./pi/deslop-please.ts"],
+    "skills": ["./skills"]
+  }
+}
