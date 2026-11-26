@@ -1,0 +1,18 @@
+{
+  "deslop-please": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "./hooks/check.sh session-start agy",
+        "timeout": 60
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "./hooks/check.sh stop agy",
+        "timeout": 600
+      }
+    ]
+  }
+}

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# deslop-please's hook for coding agents (Claude Code, Codex, Cursor, pi).
+# deslop-please's hook for coding agents (Claude Code, Codex, Cursor, pi, agy).
 #
-#   check.sh session-start [cursor]   remember the Rust files of the project's workspace
-#   check.sh stop [cursor]            if they changed since, run deslop-please, and if
-#                                     it reports errors, hand them back to the agent
+#   check.sh session-start [cursor|agy]  remember the Rust files of the project's workspace
+#   check.sh stop [cursor|agy]           if they changed since, run deslop-please, and if
+#                                        it reports errors, hand them back to the agent
 #
 # A stop checks only what changed since the last check in this session, so a
 # turn that touched no Rust code is never held up, and one that is blocked
@@ -14,11 +14,13 @@
 #
 # Errors are handed back as Claude Code and Codex take them: exit 2 with the
 # report on stderr. With `cursor`, as Cursor takes them: exit 0 with
-# `{"followup_message": <report>}` on stdout.
+# `{"followup_message": <report>}` on stdout. With `agy`, as Antigravity takes
+# them: exit 0 with `{"decision": "continue", "reason": <report>}` on stdout.
 #
-# Reads the hook's JSON on stdin for its session (`session_id`, or Cursor's
-# `conversation_id`), and the project from CLAUDE_PROJECT_DIR or
-# CURSOR_PROJECT_DIR, else the current directory.
+# Reads the hook's JSON on stdin for its session (`session_id`, Cursor's
+# `conversation_id`, or Antigravity's `conversationId`), and the project from
+# CLAUDE_PROJECT_DIR, CURSOR_PROJECT_DIR, stdin's `cwd`/`workspacePaths`, else
+# the current directory.
 
 set -u
 
@@ -26,17 +28,49 @@ mode=${1:-stop}
 agent=${2:-}
 input=$(cat)
 
-cd "${CLAUDE_PROJECT_DIR:-${CURSOR_PROJECT_DIR:-.}}" 2>/dev/null || exit 0
-command -v cargo >/dev/null 2>&1 || exit 0
-manifest=$(cargo locate-project --workspace --message-format plain 2>/dev/null) || exit 0
+allow() {
+    if [ "$agent" = agy ]; then
+        if [ "$mode" = session-start ]; then
+            printf '{}\n'
+        else
+            printf '{"decision": "allow"}\n'
+        fi
+    fi
+    exit 0
+}
+
+if [ "$agent" = agy ] && [ "$mode" = stop ]; then
+    reason=$(printf '%s' "$input" |
+        sed -n 's/.*"terminationReason"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+        head -n 1)
+    if [ -n "$reason" ] && [ "$reason" != NO_TOOL_CALL ]; then
+        allow
+    fi
+fi
+
+project_dir="${CLAUDE_PROJECT_DIR:-${CURSOR_PROJECT_DIR:-}}"
+if [ -z "$project_dir" ]; then
+    project_dir=$(printf '%s' "$input" |
+        sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+        head -n 1)
+fi
+if [ -z "$project_dir" ]; then
+    project_dir=$(printf '%s' "$input" |
+        sed -n 's/.*"workspacePaths"[[:space:]]*:[[:space:]]*\[[[:space:]]*"\([^"]*\)".*/\1/p' |
+        head -n 1)
+fi
+cd "${project_dir:-.}" 2>/dev/null || allow
+command -v cargo >/dev/null 2>&1 || allow
+manifest=$(cargo locate-project --workspace --message-format plain 2>/dev/null) || allow
 root=$(dirname "$manifest")
 
 session=$(printf '%s' "$input" |
     sed -n -e 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-        -e 's/.*"conversation_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+        -e 's/.*"conversation_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        -e 's/.*"conversationId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
     head -n 1 | tr -cd 'A-Za-z0-9_-')
-state_dir="${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}/deslop-please-hook}"
-mkdir -p "$state_dir" 2>/dev/null || exit 0
+state_dir="${CLAUDE_PLUGIN_DATA:-${PLUGIN_DATA:-${TMPDIR:-/tmp}/deslop-please-hook}}"
+mkdir -p "$state_dir" 2>/dev/null || allow
 state="$state_dir/${session:-session}-$(printf '%s' "$root" | cksum | cut -d ' ' -f 1)"
 
 # The Rust files under the workspace's root, by content; build output and
@@ -62,23 +96,23 @@ json_string() {
 now=$(fingerprint)
 if [ "$mode" = session-start ]; then
     printf '%s\n' "$now" >"$state"
-    exit 0
+    allow
 fi
 if [ -f "$state" ] && [ "$(cat "$state")" = "$now" ]; then
-    exit 0
+    allow
 fi
 printf '%s\n' "$now" >"$state"
 
-command -v deslop-please >/dev/null 2>&1 || exit 0
-allow="$root/.deslop-please.allow"
+command -v deslop-please >/dev/null 2>&1 || allow
+allow_file="$root/.deslop-please.allow"
 arguments=()
-[ -f "$allow" ] && arguments=(--allow "$allow")
+[ -f "$allow_file" ] && arguments=(--allow "$allow_file")
 errors="$state.stderr"
 report=$(cd "$root" && CARGO_TERM_COLOR=never deslop-please ${arguments[@]+"${arguments[@]}"} 2>"$errors")
 status=$?
 case $status in
     0)
-        exit 0
+        allow
         ;;
     1)
         message="deslop-please reports structural errors in the Rust workspace at $root.
@@ -91,6 +125,10 @@ $report"
             printf '{"followup_message": %s}\n' "$(json_string "$message")"
             exit 0
         fi
+        if [ "$agent" = agy ]; then
+            printf '{"decision": "continue", "reason": %s}\n' "$(json_string "$message")"
+            exit 0
+        fi
         printf '%s\n' "$message" >&2
         exit 2
         ;;
@@ -98,6 +136,9 @@ $report"
         # It could not run: tell the user, do not hold up the stop.
         printf 'deslop-please could not check %s:\n' "$root" >&2
         cat "$errors" >&2
+        if [ "$agent" = agy ]; then
+            printf '{"decision": "allow"}\n'
+        fi
         exit 1
         ;;
 esac
