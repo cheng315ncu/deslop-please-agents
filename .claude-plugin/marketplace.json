@@ -6,7 +6,7 @@
     {
       "name": "deslop-please",
       "source": "./",
-      "description": "deslop-please for agents: MCP server, skill and Stop hook for Rust workspaces."
+      "description": "deslop-please for agents: skill and Stop hook for Rust workspaces."
     }
   ]
 }
